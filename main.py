@@ -86,9 +86,7 @@ def train_epoch(model, train_loader, optimizer, lr_scheduler, step):
 
 
     for batch in tqdm_object:
-        # batch = {k: v.to(CFG.device) if k != "video" else v for k, v in batch.items()}
-        # batch = {k: v.to(CFG.device) for k, v in batch.items()}
-        # print(list(batch.keys()))
+        batch = {k: v.to(CFG.device) for k, v in batch.items()}
         loss = model(batch)
         optimizer.zero_grad()
         loss.backward()
@@ -108,7 +106,7 @@ def valid_epoch(model, valid_loader):
 
     tqdm_object = tqdm(valid_loader, total=len(valid_loader))
     for batch in tqdm_object:
-        # batch = {k: v.to(CFG.device) for k, v in batch.items() if k != "caption"}
+        batch = {k: v.to(CFG.device) for k, v in batch.items()}
         loss = model(batch)
 
         count = batch["image"].size(0)
@@ -127,8 +125,7 @@ def main():
     valid_loader = build_loaders(valid_df, _, mode="valid")
 
 
-    # model = CLIPModel().to(CFG.device)
-    model = CLIPModel()
+    model = CLIPModel().to(CFG.device)
     optimizer = torch.optim.AdamW(
         model.parameters(), lr=CFG.lr, weight_decay=CFG.weight_decay
     )

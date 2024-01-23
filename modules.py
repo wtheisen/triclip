@@ -101,7 +101,7 @@ class VideoEncoder(nn.Module):
             seq_length = (num_frames // self.model.config.tubelet_size) * num_patches_per_frame
             bool_masked_pos = torch.randint(0, 2, (1, seq_length)).bool()
 
-            outputs = self.model(pixel_values, bool_masked_pos=bool_masked_pos)
+            outputs = self.model(pixel_values.to(CFG.device), bool_masked_pos=bool_masked_pos.to(CFG.device))
 
             # Aggregate the outputs for each video
             aggregated_output = torch.mean(outputs.last_hidden_state, dim=1)

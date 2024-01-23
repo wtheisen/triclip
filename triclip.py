@@ -42,10 +42,10 @@ class CLIPModel(nn.Module):
         text_embeddings = self.text_projection(text_features)
         video_embeddings = self.video_projection(video_features)
 
-        print(image_embeddings.shape)
-        print(text_embeddings.shape)
+        # print(image_embeddings.shape)
+        # print(text_embeddings.shape)
         video_embeddings = video_embeddings.squeeze(1)
-        print(video_embeddings.shape)
+        # print(video_embeddings.shape)
 
         # Calculating the Loss
         text_image_logits = (text_embeddings @ image_embeddings.T) / self.temperature
@@ -81,7 +81,7 @@ class CLIPModel(nn.Module):
         # Combine the losses
         loss = (texts_images_loss + images_texts_loss + texts_videos_loss + videos_texts_loss + images_videos_loss + videos_images_loss) / 6
 
-        print(loss.mean())
+        # print(loss.mean())
         return loss.mean() 
 
 
