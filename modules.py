@@ -61,19 +61,19 @@ class VideoEncoder(nn.Module):
         indices = np.clip(indices, start_idx, end_idx - 1).astype(np.int64)
         return indices
 
-    def forward(self, x):
-        print(x.shape)
-        pixel_values = self.processor(x, return_tensors="pt").pixel_values
+    # def forward(self, x):
+    #     print(x.shape)
+    #     pixel_values = self.processor(x, return_tensors="pt").pixel_values
 
-        num_frames = 16
+    #     num_frames = 16
 
-        num_patches_per_frame = (self.model.config.image_size // self.model.config.patch_size) ** 2
-        seq_length = (num_frames // self.model.config.tubelet_size) * num_patches_per_frame
-        bool_masked_pos = torch.randint(0, 2, (1, seq_length)).bool()
+    #     num_patches_per_frame = (self.model.config.image_size // self.model.config.patch_size) ** 2
+    #     seq_length = (num_frames // self.model.config.tubelet_size) * num_patches_per_frame
+    #     bool_masked_pos = torch.randint(0, 2, (1, seq_length)).bool()
 
-        outputs = self.model(pixel_values, bool_masked_pos=bool_masked_pos)
+    #     outputs = self.model(pixel_values, bool_masked_pos=bool_masked_pos)
 
-        return torch.mean(outputs.last_hidden_state, dim=1)
+    #     return torch.mean(outputs.last_hidden_state, dim=1)
 
     def forward(self, batch_videos):
         batch_outputs = []

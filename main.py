@@ -9,8 +9,8 @@ from torch import nn
 from transformers import DistilBertTokenizer
 
 import config as CFG
-from dataset import CLIPDataset, get_transforms
-from CLIP import CLIPModel
+from dataset import CLIPTriplets, CLIPDataset, get_transforms
+from triclip import CLIPModel
 from utils import AvgMeter, get_lr
 
 
@@ -30,12 +30,20 @@ def make_train_valid_dfs():
 
 def build_loaders(dataframe, tokenizer, mode):
     transforms = get_transforms(mode=mode)
-    dataset = CLIPDataset(
+
+    dataset = CLIPTriplets(
         dataframe["image"].values,
-        dataframe["caption"].values,
-        tokenizer=tokenizer,
-        transforms=transforms,
+        dataframe["input_ids"].values,
+        dataframe["attention_masks"].values,
+        dataframe["video"].values
     )
+
+    # dataset = CLIPDataset(
+    #     dataframe["image"].values,
+    #     dataframe["caption"].values,
+    #     tokenizer=tokenizer,
+    #     transforms=transforms,
+    # )
     dataloader = torch.utils.data.DataLoader(
         dataset,
         batch_size=CFG.batch_size,
@@ -44,12 +52,43 @@ def build_loaders(dataframe, tokenizer, mode):
     )
     return dataloader
 
+def generate_dummy_data(num_samples):
+    dataframe = pd.DataFrame(columns=["id", "image", "input_ids", "attention_masks", "video"])
+
+    sample_size = 1
+    for samp_num in range(0, num_samples):
+        dataframe.loc[samp_num] = [
+            samp_num,
+            torch.randn(3, 224, 224),
+            torch.randint(5, 300, size=(25,)),
+            torch.ones(25),
+            torch.rand(16, 3, 224, 224)
+        ]
+
+    max_id = dataframe["id"].max() + 1 if not CFG.debug else 100
+    image_ids = np.arange(0, max_id)
+
+    np.random.seed(42)
+    valid_ids = np.random.choice(
+        image_ids, size=int(0.2 * len(image_ids)), replace=False
+    )
+
+    train_ids = [id_ for id_ in image_ids if id_ not in valid_ids]
+
+    train_dataframe = dataframe[dataframe["id"].isin(train_ids)].reset_index(drop=True)
+    valid_dataframe = dataframe[dataframe["id"].isin(valid_ids)].reset_index(drop=True)
+
+    return train_dataframe, valid_dataframe, dataframe
 
 def train_epoch(model, train_loader, optimizer, lr_scheduler, step):
     loss_meter = AvgMeter()
     tqdm_object = tqdm(train_loader, total=len(train_loader))
+
+
     for batch in tqdm_object:
-        batch = {k: v.to(CFG.device) for k, v in batch.items() if k != "caption"}
+        # batch = {k: v.to(CFG.device) if k != "video" else v for k, v in batch.items()}
+        # batch = {k: v.to(CFG.device) for k, v in batch.items()}
+        # print(list(batch.keys()))
         loss = model(batch)
         optimizer.zero_grad()
         loss.backward()
@@ -69,7 +108,7 @@ def valid_epoch(model, valid_loader):
 
     tqdm_object = tqdm(valid_loader, total=len(valid_loader))
     for batch in tqdm_object:
-        batch = {k: v.to(CFG.device) for k, v in batch.items() if k != "caption"}
+        # batch = {k: v.to(CFG.device) for k, v in batch.items() if k != "caption"}
         loss = model(batch)
 
         count = batch["image"].size(0)
@@ -80,13 +119,16 @@ def valid_epoch(model, valid_loader):
 
 
 def main():
-    train_df, valid_df = make_train_valid_dfs()
-    tokenizer = DistilBertTokenizer.from_pretrained(CFG.text_tokenizer)
-    train_loader = build_loaders(train_df, tokenizer, mode="train")
-    valid_loader = build_loaders(valid_df, tokenizer, mode="valid")
+    # train_df, valid_df = make_train_valid_dfs()
+    train_df, valid_df, _ = generate_dummy_data(1000)
+
+    # tokenizer = DistilBertTokenizer.from_pretrained(CFG.text_tokenizer)
+    train_loader = build_loaders(train_df, _, mode="train")
+    valid_loader = build_loaders(valid_df, _, mode="valid")
 
 
-    model = CLIPModel().to(CFG.device)
+    # model = CLIPModel().to(CFG.device)
+    model = CLIPModel()
     optimizer = torch.optim.AdamW(
         model.parameters(), lr=CFG.lr, weight_decay=CFG.weight_decay
     )

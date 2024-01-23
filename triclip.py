@@ -94,12 +94,12 @@ def cross_entropy(preds, targets, reduction='none'):
         return loss.mean()
 
 if __name__ == '__main__':
-    num_samples = 64
+    num_samples = 8
 
     images = torch.randn(num_samples, 3, 224, 224)
     input_ids = torch.randint(5, 300, size=(num_samples, 25))
     attention_mask = torch.ones(num_samples, 25)
-    videos = list(torch.rand(num_samples, 16, 3, 224, 224))
+    videos = torch.rand(num_samples, 16, 3, 224, 224)
 
     batch = {
         'image': images,
@@ -108,6 +108,6 @@ if __name__ == '__main__':
         'video': videos
     }
 
-    CLIP = CLIPModel()
-    loss = CLIP(batch)
+    CLIP = CLIPModel().to(CFG.device)
+    loss = CLIP({k: v.to(CFG.device) if k != "video" else v for k, v in batch.items()})
     print("SNEED")

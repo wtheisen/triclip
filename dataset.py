@@ -5,6 +5,23 @@ import albumentations as A
 
 import config as CFG
 
+class CLIPTriplets(torch.utils.data.Dataset):
+    def __init__(self, images, input_ids, attention_masks, videos):
+        self.images = images
+        self.input_ids = input_ids
+        self.attention_masks = attention_masks
+        self.videos = videos
+
+    def __getitem__(self, idx):
+        return {
+            'image': self.images[idx],
+            'input_ids': self.input_ids[idx],
+            'attention_mask': self.attention_masks[idx],
+            'video': self.videos[idx]
+        }
+
+    def __len__(self):
+        return len(self.images)
 
 class CLIPDataset(torch.utils.data.Dataset):
     def __init__(self, image_filenames, captions, tokenizer, transforms):
