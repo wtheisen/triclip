@@ -15,7 +15,7 @@ from utils import AvgMeter, get_lr
 
 
 def make_train_valid_dfs():
-    dataframe = pd.read_csv(f"{CFG.captions_path}/captions.csv")
+    dataframe = pd.read_csv(f"{CFG.captions_path}/video_captions.csv", delimiter='|')
     max_id = dataframe["id"].max() + 1 if not CFG.debug else 100
     image_ids = np.arange(0, max_id)
     np.random.seed(42)
@@ -31,19 +31,20 @@ def make_train_valid_dfs():
 def build_loaders(dataframe, tokenizer, mode):
     transforms = get_transforms(mode=mode)
 
+    # dataset = CLIPTriplets(
+    #     dataframe["image"].values,
+    #     dataframe["input_ids"].values,
+    #     dataframe["attention_masks"].values,
+    #     dataframe["video"].values
+    # )
+
     dataset = CLIPTriplets(
-        dataframe["image"].values,
-        dataframe["input_ids"].values,
-        dataframe["attention_masks"].values,
-        dataframe["video"].values
+        dataframe["caption"].values,
+        dataframe["video_path"].values,
+        tokenizer=tokenizer,
+        transforms=transforms,
     )
 
-    # dataset = CLIPDataset(
-    #     dataframe["image"].values,
-    #     dataframe["caption"].values,
-    #     tokenizer=tokenizer,
-    #     transforms=transforms,
-    # )
     dataloader = torch.utils.data.DataLoader(
         dataset,
         batch_size=CFG.batch_size,
@@ -86,7 +87,12 @@ def train_epoch(model, train_loader, optimizer, lr_scheduler, step):
 
 
     for batch in tqdm_object:
-        batch = {k: v.to(CFG.device) for k, v in batch.items()}
+        # for k, v in batch.items():
+        #     print(k, type(v))
+        #     print(k, v.shape)
+
+        # exit()
+        # batch = {k: v.to(CFG.device) for k, v in batch.items()}
         loss = model(batch)
         optimizer.zero_grad()
         loss.backward()
@@ -117,12 +123,12 @@ def valid_epoch(model, valid_loader):
 
 
 def main():
-    # train_df, valid_df = make_train_valid_dfs()
-    train_df, valid_df, _ = generate_dummy_data(1000)
+    train_df, valid_df = make_train_valid_dfs()
+    # train_df, valid_df, _ = generate_dummy_data(1000)
 
-    # tokenizer = DistilBertTokenizer.from_pretrained(CFG.text_tokenizer)
-    train_loader = build_loaders(train_df, _, mode="train")
-    valid_loader = build_loaders(valid_df, _, mode="valid")
+    tokenizer = DistilBertTokenizer.from_pretrained(CFG.text_tokenizer)
+    train_loader = build_loaders(train_df, tokenizer, mode="train")
+    valid_loader = build_loaders(valid_df, tokenizer, mode="valid")
 
 
     model = CLIPModel().to(CFG.device)

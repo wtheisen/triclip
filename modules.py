@@ -1,7 +1,6 @@
-import timm
 import torch
 from torch import nn
-from transformers import DistilBertModel, DistilBertConfig, VideoMAEModel, VideoMAEImageProcessor
+from transformers import DistilBertModel, DistilBertConfig, VideoMAEModel, VideoMAEImageProcessor, ViTImageProcessor, ViTMAEModel
 import config as CFG
 from decord import VideoReader, cpu
 import numpy as np
@@ -16,23 +15,29 @@ class ImageEncoder(nn.Module):
         self, model_name=CFG.model_name, pretrained=CFG.pretrained, trainable=CFG.trainable
     ):
         super().__init__()
-        self.model = timm.create_model(
-            model_name, pretrained, num_classes=0, global_pool="avg"
-        )
-        for p in self.model.parameters():
-            p.requires_grad = trainable
+        self.processor = ViTImageProcessor.from_pretrained('facebook/vit-mae-base')
+        self.model = ViTMAEModel.from_pretrained('facebook/vit-mae-base')
+        # self.model = timm.create_model(
+        #     model_name, pretrained, num_classes=0, global_pool="avg"
+        # )
+        # for p in self.model.parameters():
+        #     p.requires_grad = trainable
 
     def forward(self, x):
-        return self.model(x)
+        # print(x.shape)
+        p_v = self.processor(images=x, return_tensors="pt").pixel_values
+        outputs = self.model(p_v.to(CFG.device))
+        return torch.mean(outputs.last_hidden_state, dim=1)
+        # return self.model(x)
 
 
 class TextEncoder(nn.Module):
     def __init__(self, model_name=CFG.text_encoder_model, pretrained=CFG.pretrained, trainable=CFG.trainable):
         super().__init__()
-        if pretrained:
-            self.model = DistilBertModel.from_pretrained(model_name)
-        else:
-            self.model = DistilBertModel(config=DistilBertConfig())
+        # if pretrained:
+        self.model = DistilBertModel.from_pretrained(model_name)
+        # else:
+        #     self.model = DistilBertModel(config=DistilBertConfig())
             
         for p in self.model.parameters():
             p.requires_grad = trainable
@@ -53,13 +58,13 @@ class VideoEncoder(nn.Module):
         self.model = VideoMAEModel.from_pretrained(model_name)
         self.processor = VideoMAEImageProcessor.from_pretrained(model_name, do_rescale=False)
         
-    def sample_frame_indices(clip_len, frame_sample_rate, seg_len):
-        converted_len = int(clip_len * frame_sample_rate)
-        end_idx = np.random.randint(converted_len, seg_len)
-        start_idx = end_idx - converted_len
-        indices = np.linspace(start_idx, end_idx, num=clip_len)
-        indices = np.clip(indices, start_idx, end_idx - 1).astype(np.int64)
-        return indices
+    # def sample_frame_indices(clip_len, frame_sample_rate, seg_len):
+    #     converted_len = int(clip_len * frame_sample_rate)
+    #     end_idx = np.random.randint(converted_len, seg_len)
+    #     start_idx = end_idx - converted_len
+    #     indices = np.linspace(start_idx, end_idx, num=clip_len)
+    #     indices = np.clip(indices, start_idx, end_idx - 1).astype(np.int64)
+    #     return indices
 
     # def forward(self, x):
     #     print(x.shape)
@@ -93,7 +98,6 @@ class VideoEncoder(nn.Module):
 
         for x in batch_videos:
             # Process each video in the batch
-            # print(x.shape)
             pixel_values = self.processor(list(x), return_tensors="pt").pixel_values
 
             num_frames = 16
