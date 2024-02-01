@@ -9,7 +9,8 @@ import numpy as np
 from decord import VideoReader, cpu
 
 class CLIPTriplets(torch.utils.data.Dataset):
-    def __init__(self, caption, video_path, tokenizer, transforms):
+    def __init__(self, ids, caption, video_path, tokenizer, transforms):
+        self.ids = ids
         self.images = ''
         self.captions = caption
         self.encoded_captions = tokenizer(
@@ -76,6 +77,7 @@ class CLIPTriplets(torch.utils.data.Dataset):
         item['input_ids'] = np.asarray(self.encoded_captions['input_ids'][idx])
         item['attention_mask'] = np.asarray(self.encoded_captions['attention_mask'][idx])
 
+        item["id"] = self.ids[idx]
         return item
 
     def __len__(self):
