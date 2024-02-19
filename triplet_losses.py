@@ -6,6 +6,9 @@ def triplet_loss(anchor, positive, negative):
 
         losses = torch.log(1 + torch.exp(distance_positive - distance_negative))
 
+        # margin = 100
+        # losses = torch.relu(distance_positive - distance_negative + margin)
+
         return losses.mean()
 
 def triplet_alfa(image_embeddings, text_embeddings, video_embeddings):
@@ -124,9 +127,9 @@ def triplet_delta(image_embeddings, text_embeddings, video_embeddings):
                 for i in range(3):
                     for j in range(3):
                         for q in range(3):
-                            if i != j:
-                                # losses.append(triplet_loss(anchor[i], anchor[j], hard_negative[q]))
-                                total_loss += triplet_loss(anchor[i], anchor[j], hard_negative[q])
-                # total_loss += sum(losses) / len(losses)
-    # return total_loss
-    return total_loss
+                            # if i != j:
+                            losses.append(triplet_loss(anchor[i], anchor[j], hard_negative[q]))
+                                # total_loss += triplet_loss(anchor[i], anchor[j], hard_negative[q])
+                total_loss += sum(losses) / len(losses)
+
+    return total_loss / batch_size

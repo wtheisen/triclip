@@ -1,7 +1,8 @@
+import torch
 import torch.nn.functional as F
 
 def cross_entropy(preds, targets, reduction='none'):
-    log_softmax = nn.LogSoftmax(dim=-1)
+    log_softmax = torch.nn.LogSoftmax(dim=-1)
     loss = (-targets * log_softmax(preds)).sum(1)
     if reduction == "none":
         return loss

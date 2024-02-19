@@ -6,7 +6,9 @@ import albumentations as A
 import config as CFG
 import numpy as np
 
-from decord import VideoReader, cpu
+from decord import VideoReader, VideoLoader, cpu, gpu, bridge
+
+bridge.set_bridge('torch')
 
 class CLIPTriplets(torch.utils.data.Dataset):
     def __init__(self, ids, caption, video_path, tokenizer, transforms):
@@ -16,7 +18,20 @@ class CLIPTriplets(torch.utils.data.Dataset):
         self.encoded_captions = tokenizer(
             list(caption), padding=True, truncation=True, max_length=CFG.max_length
         )
+        # self.video_paths = video_path
         self.videos = video_path
+        # print(self.video_paths)
+            #     self.videos = VideoLoader(self.video_paths.tolist(), 
+            #                             ctx=[cpu(0)], 
+            #                             shape=(len(self.video_paths), 320, 240, 3),
+            #                             interval=1,
+            #                             skip=4,
+            #                             shuffle=0)
+            # except:
+            #     print(v_p)
+            #     exit(69)
+
+        # print('dilate')
         self.transforms = transforms
 
     # def __getitem__(self, idx):
@@ -58,21 +73,39 @@ class CLIPTriplets(torch.utils.data.Dataset):
             key: torch.tensor(values[idx])
             for key, values in self.encoded_captions.items()
         }
+        item['video_path'] = self.videos[idx]
 
         #get video frames and take an image out of the unchosen one
-        videoreader = VideoReader(self.videos[idx], num_threads=1, ctx=cpu(0))
+        videoreader = VideoReader(self.videos[idx], num_threads=4, ctx=cpu(0), width=244, height=244)
         videoreader.seek(0)
-        indices, image_frame = self.sample_frame_indices(clip_len=16, frame_sample_rate=4, seg_len=len(videoreader))
-        video = videoreader.get_batch(indices).asnumpy()
-        item['video'] = self.preprocess_video(video)
 
-        image = videoreader[image_frame].asnumpy()
+        # try:
+        #     indices, image_frame = self.sample_frame_indices(clip_len=16, frame_sample_rate=4, seg_len=len(videoreader))
+        # except:
+        #     print(self.videos[idx])
+        #     exit(69)
+
+        indices = np.random.randint(0, len(videoreader) - 1, size=17)
+
+        # video = videoreader.get_batch(indices[:-1]).asnumpy()
+        try:
+            item['video'] = videoreader.get_batch(indices[:-1])
+        except:
+            print(self.videos[idx])
+            print('Error Reading Batch')
+            item['video'] = None
+
+        # item['video'] = self.preprocess_video(video)
+        # item['video'] = video.transpose(0, 3, 1, 2)
+
+        # item['image'] = videoreader[indices[-1]].asnumpy()
+        item['image'] = videoreader[indices[-1]]
         #preprocess video
 
         # image = cv2.imread(f"{CFG.image_path}/{self.image_filenames[idx]}")
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        image = self.transforms(image=image)['image']
-        item['image'] = torch.tensor(image.astype(np.uint8)).permute(2, 0, 1).float()
+        # image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        # image = self.transforms(image=image)['image']
+        # item['image'] = torch.tensor(image.astype(np.uint8)).permute(2, 0, 1).float()
         # item['caption'] = self.captions[idx]
         item['input_ids'] = np.asarray(self.encoded_captions['input_ids'][idx])
         item['attention_mask'] = np.asarray(self.encoded_captions['attention_mask'][idx])

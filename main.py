@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
+from collections import defaultdict, Counter
 
 import torch
 from torch import nn
@@ -9,18 +10,27 @@ from transformers import DistilBertTokenizer
 import config as CFG
 from dataset import CLIPTriplets, CLIPDataset, get_transforms
 from triclip import CLIPModel
-from utils import AvgMeter, get_lr
+from utils import AvgMeter, get_lr, make_train_valid_dfs, build_loaders
 from sklearn.metrics import average_precision_score, recall_score
 
-def test_retrieval(model, test_loader, num_trials=10):
+from decord import VideoReader, cpu
+
+import time
+
+def test_retrieval(model, test_loader, num_trials=100):
     tqdm_object = tqdm(test_loader, total=len(test_loader))
 
     embed_dict = {}
-    embed_list = []
+    vid_embed_list = []
+    img_embed_list = []
+    txt_embed_list = []
+    combined_embed_list = []
+
+    modalities = ['VID', 'IMG', 'TXT']
 
     with torch.no_grad():
         for batch in tqdm_object:
-            gpu_batch = {k: v.to(CFG.device) for k, v in batch.items()}
+            gpu_batch = {k: v.to(CFG.device) if k != 'video_path' else v for k, v in batch.items()}
             vid_embed, img_embed, txt_embed = model.embed(gpu_batch)
 
             for num in range(0, len(vid_embed)):
@@ -30,125 +40,82 @@ def test_retrieval(model, test_loader, num_trials=10):
                     txt_embed[num]
                 )
 
-                embed_list.append(vid_embed[num])
-                embed_list.append(img_embed[num])
-                embed_list.append(txt_embed[num])
+                vid_embed_list.append(vid_embed[num])
+                img_embed_list.append(img_embed[num])
+                txt_embed_list.append(txt_embed[num])
 
-    for recall in [1, 5, 10, 25]:
-        trial_accuracy = 0
+                combined_embed_list.append(vid_embed[num])
+                combined_embed_list.append(img_embed[num])
+                combined_embed_list.append(txt_embed[num])
 
-        for _ in range(0, num_trials):
-            # pick random embedding from all of them
-            test_id = np.random.randint(0, len(embed_list))
-            test_embedding = embed_list[test_id]
+    # for recall in [5]:
 
-            # compute the cosine similarity of that random embedding to all others
-            scores = []
+    recall_dict = {
+        1: 0,
+        5: 0,
+        10: 0,
+        25: 0
+    }
+
+    for _ in range(0, num_trials):
+        # pick random embedding from all of them
+        test_id = np.random.randint(0, len(combined_embed_list))
+        test_embedding = combined_embed_list[test_id]
+
+        # find the id of the triplet the randomly selected embedding was from
+        true_id = None
+        for id, triple in embed_dict.items():
+            for i in range(3):
+                if torch.equal(test_embedding.to(CFG.device), triple[i]):
+                    true_id = (id, modalities[i])
+
+        if true_id[1] == 'TXT':
+            search_space = [vid_embed_list, img_embed_list]
+        elif true_id[1] == 'IMG':
+            search_space = [vid_embed_list, txt_embed_list]
+        elif true_id[1] == 'VID':
+            search_space = [txt_embed_list, img_embed_list]
+
+        # compute the cosine similarity of that random embedding to all others
+        scores = defaultdict(list)
+        for i, embed_list in enumerate(search_space):
             for embedding in embed_list:
-                if embedding is test_embedding:
-                    continue
-
                 sim = nn.functional.cosine_similarity(test_embedding, embedding, dim=0)
-                scores.append((sim, embedding))
+                scores[modalities[i]].append((sim, embedding))
 
-            # find the id of the triplet the randomly selected embedding was from
-            true_id = None
-            for id, triple in embed_dict.items():
-                for t in triple:
-                    if torch.equal(test_embedding.to(CFG.device), t):
-                        true_id = id
-
-            # find the triplet ids of the N closest embeddings
-            closest_ids = []
-            for score, embedding in sorted(scores, key=lambda x: x[0], reverse=True)[:recall]:
+        # find the triplet ids of the N closest embeddings
+        # for each of the three modalities find the N closest items
+        # if the IDs are shared amongst the lists combine them into a single item
+        closest_ids = defaultdict(list)
+        for modality, score_list in scores.items():
+            for score, embedding in sorted(score_list, key=lambda x: x[0], reverse=True):
                 for id, triple in embed_dict.items():
-                    for t in triple:
-                        if torch.equal(embedding.to(CFG.device), t):
-                            closest_ids.append(id)
+                    for i in range(3):
+                        if torch.equal(embedding.to(CFG.device), triple[i]):
+                            closest_ids[modalities[i]].append((id, score))
 
-            # print(true_id, closest_ids)
-            for id in closest_ids:
-                if id == true_id:
-                    trial_accuracy += 0.5
+        combined_id_scores = Counter()
+        for modality, scores in closest_ids.items():
+            if modality == true_id[1]:
+                continue
 
-        print(f'Recall @ {recall}', trial_accuracy / num_trials)
+            for score in scores:
+                combined_id_scores[score[0]] += score[1]
 
+        for recall in [1, 5, 10, 25]:
+            for rank, id_score in enumerate(combined_id_scores.most_common(recall)):
+                if id_score[0] == true_id[0]:
+                    recall_dict[recall] += 1
 
-def make_train_valid_dfs():
-    dataframe = pd.read_csv(f"{CFG.captions_path}/video_captions.csv", delimiter='|')
-    max_id = dataframe["id"].max() + 1 if not CFG.debug else 1000
-    image_ids = np.arange(0, max_id)
+    print(f'Contrastive Alfa@ {num_trials} trials:')
+    print(f'\tTrain/Val/Test: {CFG.num_train}/{CFG.num_val}/{CFG.num_test} - {CFG.epochs} Epochs')
+    for recall, hits in recall_dict.items():
+        print(f'\t\tRecall @ {recall}',  hits / num_trials)
+    
+    for recall, hits in recall_dict.items():
+        recall_dict[recall] = hits / num_trials
 
-    np.random.seed(42)
-    val_test_ids = np.random.choice(
-        image_ids, size=int(0.2 * len(image_ids)), replace=False
-    )
-
-    train_ids = [id_ for id_ in image_ids if id_ not in val_test_ids]
-    train_dataframe = dataframe[dataframe["id"].isin(train_ids)].reset_index(drop=True)
-
-    val_ids = val_test_ids[:len(val_test_ids)//2]
-    test_ids = val_test_ids[len(val_test_ids)//2:]
-    test_ids = test_ids[:20]
-    val_dataframe = dataframe[dataframe["id"].isin(val_ids)].reset_index(drop=True)
-    test_dataframe = dataframe[dataframe["id"].isin(test_ids)].reset_index(drop=True)
-
-    return train_dataframe, val_dataframe, test_dataframe
-
-
-def build_loaders(dataframe, tokenizer, mode):
-    transforms = get_transforms(mode=mode)
-
-    # dataset = CLIPTriplets(
-    #     dataframe["image"].values,
-    #     dataframe["input_ids"].values,
-    #     dataframe["attention_masks"].values,
-    #     dataframe["video"].values
-    # )
-
-    dataset = CLIPTriplets(
-        dataframe["id"].values,
-        dataframe["caption"].values,
-        dataframe["video_path"].values,
-        tokenizer=tokenizer,
-        transforms=transforms,
-    )
-
-    dataloader = torch.utils.data.DataLoader(
-        dataset,
-        batch_size=CFG.batch_size,
-        num_workers=CFG.num_workers,
-        shuffle=True if mode == "train" else False,
-    )
-    return dataloader
-
-def generate_dummy_data(num_samples):
-    dataframe = pd.DataFrame(columns=["id", "image", "input_ids", "attention_masks", "video"])
-
-    sample_size = 1
-    for samp_num in range(0, num_samples):
-        dataframe.loc[samp_num] = [
-            samp_num,
-            torch.randn(3, 224, 224),
-            torch.randint(5, 300, size=(25,)),
-            torch.ones(25),
-            torch.rand(16, 3, 224, 224)
-        ]
-
-    max_id = dataframe["id"].max() + 1 if not CFG.debug else 1000
-    image_ids = np.arange(0, max_id)
-
-    np.random.seed(42)
-    valid_ids = np.random.choice(
-        image_ids, size=int(0.2 * len(image_ids)), replace=False
-    )
-
-    train_ids = [id_ for id_ in image_ids if id_ not in valid_ids]
-
-    train_dataframe = dataframe[dataframe["id"].isin(train_ids)].reset_index(drop=True)
-    valid_dataframe = dataframe[dataframe["id"].isin(valid_ids)].reset_index(drop=True)
-
-    return train_dataframe, valid_dataframe, dataframe
+    return recall_dict
 
 def train_epoch(model, train_loader, optimizer, lr_scheduler, step):
     loss_meter = AvgMeter()
@@ -156,7 +123,8 @@ def train_epoch(model, train_loader, optimizer, lr_scheduler, step):
 
 
     for batch in tqdm_object:
-        batch = {k: v.to(CFG.device) for k, v in batch.items()}
+        # batch = {k: v.to(CFG.device) for k, v in batch.items()}
+        batch = {k: v.to(CFG.device) if k != 'video_path' else v for k, v in batch.items()}
         loss = model(batch)
 
         optimizer.zero_grad()
@@ -179,7 +147,8 @@ def valid_epoch(model, valid_loader):
 
     tqdm_object = tqdm(valid_loader, total=len(valid_loader))
     for batch in tqdm_object:
-        batch = {k: v.to(CFG.device) for k, v in batch.items()}
+        batch = {k: v.to(CFG.device) if k != 'video_path' else v for k, v in batch.items()}
+
         loss = model(batch)
 
         count = batch["image"].size(0)
@@ -190,8 +159,8 @@ def valid_epoch(model, valid_loader):
 
 
 def main():
+    st = time.time()
     train_df, valid_df, test_df = make_train_valid_dfs()
-    # train_df, valid_df, _ = generate_dummy_data(1000)
 
     tokenizer = DistilBertTokenizer.from_pretrained(CFG.text_tokenizer)
     train_loader = build_loaders(train_df, tokenizer, mode="train")
@@ -221,14 +190,15 @@ def main():
         if valid_loss.avg < best_loss:
             best_loss = valid_loss.avg
             best_model = model
-            torch.save(model.state_dict(), "best.pt")
+            torch.save(model.state_dict(), f"{CFG.num_train}t_{CFG.epochs}e_best.pt")
             print("Saved Best Model!")
 
+    et = time.time()
     test_loader = build_loaders(test_df, tokenizer, mode="valid")
 
     model.eval()
     with torch.no_grad():
-        test_retrieval(best_model, test_loader)
+        return test_retrieval(best_model, test_loader), et - st
 
 if __name__ == "__main__":
     main()

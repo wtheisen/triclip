@@ -1,3 +1,15 @@
+import json
+import torch
+import random
+
+import pandas as pd
+import numpy as np
+import config as CFG
+
+from dataset import CLIPTriplets, get_transforms
+
+from collections import Counter
+
 class AvgMeter:
     def __init__(self, name="Metric"):
         self.name = name
@@ -18,3 +30,103 @@ class AvgMeter:
 def get_lr(optimizer):
     for param_group in optimizer.param_groups:
         return param_group["lr"]
+
+def make_train_valid_dfs():
+    print('Sneed')
+    dataframe = pd.read_csv(f"{CFG.captions_path}/video_captions.csv", delimiter='|')
+
+    # users = [path.split('/')[5] for path in dataframe["video_path"]]
+    # c = Counter(users)
+    # print(c)
+    # print(len(c.keys()))
+    # exit()
+
+    max_id = dataframe["id"].max() + 1
+    image_ids = np.arange(0, max_id)
+
+    np.random.seed(42)
+    val_test_ids = np.random.choice(
+        image_ids, size=int(0.2 * len(image_ids)), replace=False
+    )
+
+    train_ids = [id_ for id_ in image_ids if id_ not in val_test_ids]
+    random.shuffle(train_ids)
+    train_ids = train_ids[:CFG.num_train]
+
+    train_dataframe = dataframe[dataframe["id"].isin(train_ids)].reset_index(drop=True)
+
+    val_ids = val_test_ids[:len(val_test_ids)//2]
+    val_ids = val_ids[:CFG.num_val]
+
+    test_ids = val_test_ids[len(val_test_ids)//2:]
+    test_ids = test_ids[:CFG.num_test]
+
+    # videos = dataframe['video_path'].values[:10],
+    # videos = videos[0].tolist()
+    # print(videos)
+    # videos = VideoLoader(videos,
+    #                             ctx=[cpu(0)], 
+    #                             shape=(10, 320, 240, 3),
+    #                             interval=1,
+    #                             skip=4,
+    #                             shuffle=0)
+
+    # print('seethe buddy')
+
+    val_dataframe = dataframe[dataframe["id"].isin(val_ids)].reset_index(drop=True)
+    test_dataframe = dataframe[dataframe["id"].isin(test_ids)].reset_index(drop=True)
+
+    return train_dataframe, val_dataframe, test_dataframe
+
+def build_loaders(dataframe, tokenizer, mode):
+    transforms = get_transforms(mode=mode)
+
+    # dataset = CLIPTriplets(
+    #     dataframe["image"].values,
+    #     dataframe["input_ids"].values,
+    #     dataframe["attention_masks"].values,
+    #     dataframe["video"].values
+    # )
+
+    # videos = []
+    # for _, row in dataframe.iterrows():
+    #     with open(row["video_path"], 'rb') as f:
+    #         videos.append(VideoReader(f, num_threads=8, ctx=cpu(0), width=244, height=244))
+
+    dataset = CLIPTriplets(
+        dataframe["id"].values,
+        dataframe["caption"].values,
+        # videoreader = VideoReader(self.videos[idx], num_threads=8, ctx=cpu(0), width=244, height=244)
+        # [VideoReader(x, num_threads=8, ctx=cpu(0), width=244, height=244) for x in dataframe["video_path"]],
+        # videos,
+        dataframe["video_path"],
+        tokenizer=tokenizer,
+        transforms=transforms,
+    )
+
+    dataloader = torch.utils.data.DataLoader(
+        dataset,
+        batch_size=CFG.batch_size,
+        num_workers=CFG.num_workers,
+        shuffle=True if mode == "train" else False,
+    )
+    return dataloader
+
+def account_stance_mapper():
+    account_cluster_df = pd.read_csv('./account_cluster_map.csv')
+    cluster_stance_df = pd.read_csv('./cluster_stance_map.csv')
+    account_stance_dict = {}
+
+    for _, row in account_cluster_df.iterrows():
+        account = row[0]
+        cluster = row[1]
+
+        if cluster != 0 and cluster != 31:
+            account_stance_dict[account] = cluster_stance_df.iloc[cluster]['stance']
+
+    print(account_stance_dict)
+
+    with open('stances.py', 'w') as f:
+        json.dump(account_stance_dict, f)
+
+

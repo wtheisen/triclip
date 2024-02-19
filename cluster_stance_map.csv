@@ -1,0 +1,33 @@
+cluster,cluster_label,group_label,stance
+0,Unclustered
+1,RUS Occupied_UA News,RF STATE PROPAGANDA,rus
+2,UKR Pro-RF Commentators,RF STATE PROPAGANDA,rus
+3,UKR Pro-UA Right-Wing Support,PRO-UA NATIONALISTS,ukr
+4,RUS Z-News | Journos | Commentators,RF-PRO NATIONALISTS,rus
+5,RUS RF Regional and Local News,RF STATE PROPAGANDA,rus
+6,RUS Pro-RF Political Analysis | Commentary,RF STATE PROPAGANDA,rus
+7,RUS Pro-RF Political Analysis | Commentary II,RF STATE PROPAGANDA,rus
+8,RUS Z-News | Journos | Commentators II,RF-PRO NATIONALISTS,rus
+9,RUS Pro-RF Far-Right Orthodox Nationalism,RF-PRO NATIONALISTS,rus
+10,RUS Z-News | Journos | Commentators III,RF-PRO NATIONALISTS,rus
+11,UKR Pro-UA War News | Orgs | Activists,PRO-UA NEWS | OSINT,ukr
+12,RUS Z-News | Journos | Commentators IV,RF-PRO NATIONALISTS,rus
+13,UKR Pro-UA War News | Journos | Commentators,PRO-UA NEWS | OSINT,ukr
+14,UKR Pro-UA Official | Journos War News ,PRO-UA NEWS | OSINT,ukr
+15,UKR Pro-UA Memes,PRO-UA NATIONALISTS,ukr
+16,RUS Pro-RF Political Analysis | Commentary III,RF STATE PROPAGANDA,rus
+17,UKR UA News | Official | Commentators,PRO-UA NEWS | OSINT,ukr
+18,RUS DNR | RF Defense | Officials ,RF STATE PROPAGANDA,rus
+19,RUS Z-News | Journos | Commentators V,RF-PRO NATIONALISTS,rus
+20,URK Pro-UA News | Orgs,PRO-UA NEWS | OSINT,ukr
+21,RUS Z-News | Journos | Commentators VI,RF-PRO NATIONALISTS,rus
+22,UKR UA Right-Wing Activists | Memes,PRO-UA NATIONALISTS,ukr
+23,UKR UA Right-Wing anti-RF Memes,PRO-UA NATIONALISTS,ukr
+24,UKR UA Right-Wing anti-RF Memes II,PRO-UA NATIONALISTS,ukr
+25,UKR Right-Wing OSINT | Mil Reporting,PRO-UA NATIONALISTS,ukr
+26,UKR Pro-UA Right-Wing Support II,PRO-UA NATIONALISTS,ukr
+27,RUS Z-News | Journos | Commentators VII,RF-PRO NATIONALISTS,rus
+28,RUS Pro-RF Political Analysis | Commentary IV,RF STATE PROPAGANDA,rus
+29,UKR Right-Wing Support | Memes,PRO-UA NATIONALISTS,ukr
+30,BEL Pro-BL | Pro-RF News,OTHER,rus
+31,INT Poltical | Culture Memes Mix,OTHER

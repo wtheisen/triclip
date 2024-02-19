@@ -3,13 +3,19 @@ import torch
 debug = True
 captions_path = "/media/wtheisen/scratch3/triclip/"
 batch_size = 128
-num_workers = 1
+num_workers = 0
 lr = 1e-3
 weight_decay = 1e-3
 patience = 2
 factor = 0.5
-epochs = 1
+epochs = 10
+
+num_train = 1000
+num_val = 200
+num_test = 100
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# device = "cpu"
 
 model_name = 'facebook/vit-mae-base'
 image_embedding = 768
@@ -31,5 +37,5 @@ size = 224
 
 # for projection head; used for both image and text encoders
 num_projection_layers = 1
-projection_dim = 256 
+projection_dim = 256
 dropout = 0.1
