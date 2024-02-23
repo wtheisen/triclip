@@ -11,13 +11,12 @@ import config as CFG
 from dataset import CLIPTriplets, CLIPDataset, get_transforms
 from triclip import CLIPModel
 from utils import AvgMeter, get_lr, make_train_valid_dfs, build_loaders
-from sklearn.metrics import average_precision_score, recall_score
 
 from decord import VideoReader, cpu
 
 import time
 
-def test_retrieval(model, test_loader, num_trials=100):
+def test_retrieval(model, test_loader, num_trials=300):
     tqdm_object = tqdm(test_loader, total=len(test_loader))
 
     embed_dict = {}
@@ -30,9 +29,14 @@ def test_retrieval(model, test_loader, num_trials=100):
 
     with torch.no_grad():
         for batch in tqdm_object:
-            gpu_batch = {k: v.to(CFG.device) if k != 'video_path' else v for k, v in batch.items()}
-            vid_embed, img_embed, txt_embed = model.embed(gpu_batch)
+            # gpu_batch = {k: v.to(CFG.device) if k != 'video_path' else v for k, v in batch.items()}
+            # vid_embed, img_embed, txt_embed = model.embed(gpu_batch)
+            vid_embed = batch["video"]
+            img_embed = batch["image"]
+            txt_embed = batch["text"]
 
+            # video_embeddings = self.video_projection(video_features)
+            # vid_embed = batch['video']
             for num in range(0, len(vid_embed)):
                 embed_dict[batch["id"][num]] = (
                     vid_embed[num],
@@ -57,7 +61,10 @@ def test_retrieval(model, test_loader, num_trials=100):
         25: 0
     }
 
-    for _ in range(0, num_trials):
+    modality_correct = defaultdict(Counter)
+    modality_counts = Counter()
+
+    for _ in tqdm(range(0, num_trials), desc='Test trials'):
         # pick random embedding from all of them
         test_id = np.random.randint(0, len(combined_embed_list))
         test_embedding = combined_embed_list[test_id]
@@ -66,8 +73,10 @@ def test_retrieval(model, test_loader, num_trials=100):
         true_id = None
         for id, triple in embed_dict.items():
             for i in range(3):
-                if torch.equal(test_embedding.to(CFG.device), triple[i]):
+                if torch.equal(test_embedding, triple[i]):
                     true_id = (id, modalities[i])
+
+        modality_counts[true_id[1]] += 1
 
         if true_id[1] == 'TXT':
             search_space = [vid_embed_list, img_embed_list]
@@ -76,6 +85,7 @@ def test_retrieval(model, test_loader, num_trials=100):
         elif true_id[1] == 'VID':
             search_space = [txt_embed_list, img_embed_list]
 
+        # search_space = [txt_embed_list, img_embed_list, vid_embed_list]
         # compute the cosine similarity of that random embedding to all others
         scores = defaultdict(list)
         for i, embed_list in enumerate(search_space):
@@ -91,13 +101,13 @@ def test_retrieval(model, test_loader, num_trials=100):
             for score, embedding in sorted(score_list, key=lambda x: x[0], reverse=True):
                 for id, triple in embed_dict.items():
                     for i in range(3):
-                        if torch.equal(embedding.to(CFG.device), triple[i]):
+                        if torch.equal(embedding, triple[i]):
                             closest_ids[modalities[i]].append((id, score))
 
         combined_id_scores = Counter()
         for modality, scores in closest_ids.items():
-            if modality == true_id[1]:
-                continue
+            # if modality == true_id[1]:
+            #     continue
 
             for score in scores:
                 combined_id_scores[score[0]] += score[1]
@@ -106,6 +116,7 @@ def test_retrieval(model, test_loader, num_trials=100):
             for rank, id_score in enumerate(combined_id_scores.most_common(recall)):
                 if id_score[0] == true_id[0]:
                     recall_dict[recall] += 1
+                    modality_correct[true_id[1]][recall] += 1
 
     print(f'Contrastive Alfa@ {num_trials} trials:')
     print(f'\tTrain/Val/Test: {CFG.num_train}/{CFG.num_val}/{CFG.num_test} - {CFG.epochs} Epochs')
@@ -115,6 +126,14 @@ def test_retrieval(model, test_loader, num_trials=100):
     for recall, hits in recall_dict.items():
         recall_dict[recall] = hits / num_trials
 
+    for modality, total_num in modality_counts.items():
+        print(f'% correct for {modality} out of {total_num}:')
+
+        for k, recall in modality_correct[modality].items():
+            print(f'@{k}: {recall / total_num}')
+
+    # print(modality_counts)
+    # print(modality_correct)
     return recall_dict
 
 def train_epoch(model, train_loader, optimizer, lr_scheduler, step):
@@ -125,6 +144,7 @@ def train_epoch(model, train_loader, optimizer, lr_scheduler, step):
     for batch in tqdm_object:
         # batch = {k: v.to(CFG.device) for k, v in batch.items()}
         batch = {k: v.to(CFG.device) if k != 'video_path' else v for k, v in batch.items()}
+
         loss = model(batch)
 
         optimizer.zero_grad()
@@ -190,8 +210,9 @@ def main():
         if valid_loss.avg < best_loss:
             best_loss = valid_loss.avg
             best_model = model
-            torch.save(model.state_dict(), f"{CFG.num_train}t_{CFG.epochs}e_best.pt")
-            print("Saved Best Model!")
+
+    torch.save(model.state_dict(), f"{CFG.num_train}t_{CFG.epochs}e_best.pt")
+    print("Wrote Best Model...")
 
     et = time.time()
     test_loader = build_loaders(test_df, tokenizer, mode="valid")

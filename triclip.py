@@ -10,7 +10,7 @@ import numpy as np
 import config as CFG
 from modules import ImageEncoder, TextEncoder, VideoEncoder, ProjectionHead
 
-from decord import VideoReader, cpu
+import time
 
 class CLIPModel(nn.Module):
     def __init__(
@@ -24,7 +24,8 @@ class CLIPModel(nn.Module):
 
         self.image_encoder = ImageEncoder()
         self.text_encoder = TextEncoder()
-        self.video_encoder = VideoEncoder()
+        # self.video_encoder = VideoEncoder()
+        self.video_encoder = None
 
         self.image_projection = ProjectionHead(embedding_dim=image_embedding)
         self.text_projection = ProjectionHead(embedding_dim=text_embedding)
@@ -38,31 +39,50 @@ class CLIPModel(nn.Module):
             text_features = self.text_encoder(
                 input_ids=batch["input_ids"], attention_mask=batch["attention_mask"]
             )
-            video_features = self.video_encoder(batch["video"])
+            # video_features = self.video_encoder(batch["video"])
 
             # Getting Image and Text Embeddings (with same dimension)
             image_embeddings = self.image_projection(image_features)
             text_embeddings = self.text_projection(text_features)
-            video_embeddings = self.video_projection(video_features)
+            video_embeddings = self.video_projection(batch["video"])
             video_embeddings = video_embeddings.squeeze(1)
 
         return video_embeddings, image_embeddings, text_embeddings
 
     def forward(self, batch):
+        # st = time.time()
         # Existing code to get embeddings
-        with torch.no_grad():
-            image_encodings = self.image_encoder(batch["image"])
-            text_encodings = self.text_encoder(input_ids=batch["input_ids"], attention_mask=batch["attention_mask"])
-            video_encodings = self.video_encoder(batch["video"])
+        # with torch.no_grad():
+            # qt = time.time()
+            # image_encodings = self.image_encoder(batch["image"])
+            # xt = time.time()
+            # print('image embedding time:', xt - qt)
+            # qt = time.time()
+            # text_encodings = self.text_encoder(input_ids=batch["input_ids"], attention_mask=batch["attention_mask"])
+            # xt = time.time()
+            # print('text embedding time:', xt - qt)
+            # qt = time.time()
+            # video_encodings = batch["video"]
+            # xt = time.time()
+            # print('video embedding time:', xt - qt)
 
-        image_embeddings = self.image_projection(image_encodings)
-        text_embeddings = self.text_projection(text_encodings)
-        video_embeddings = self.video_projection(video_encodings).squeeze(1)
+        # et = time.time()
+        # print('embedding time:', et - st)
+
+        # st = time.time()
+        image_embeddings = self.image_projection(batch["image"])
+        text_embeddings = self.text_projection(batch["text"])
+        video_embeddings = self.video_projection(batch["video"]).squeeze(1)
+        # et = time.time()
+        # print('projecting time:', et - st)
 
         # Assuming batch_size is the same for all modalities
         batch_size = image_embeddings.size(0)
 
+        # st = time.time()
         total_loss = CL.contrastive_alpha(image_embeddings, text_embeddings, video_embeddings, CFG.temperature)
+        # et = time.time()
+        # print('loss time:', et - st)
 
         # total_loss = TL.triplet_alfa(image_embeddings, text_embeddings, video_embeddings) 
         # total_loss = TL.triplet_bravo(image_embeddings, text_embeddings, video_embeddings) 

@@ -4,14 +4,14 @@ debug = True
 captions_path = "/media/wtheisen/scratch3/triclip/"
 batch_size = 128
 num_workers = 0
-lr = 1e-3
+lr = 5e-5
 weight_decay = 1e-3
 patience = 2
 factor = 0.5
-epochs = 10
+epochs = 50
 
-num_train = 1000
-num_val = 200
+num_train = 100
+num_val = 100
 num_test = 100
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -23,7 +23,7 @@ image_embedding = 768
 text_encoder_model = "distilbert-base-multilingual-cased"
 text_embedding = 768
 text_tokenizer = "distilbert-base-multilingual-cased"
-max_length = 200
+max_length = 128
 
 video_encoder_model = "MCG-NJU/videomae-base"
 video_embedding = 768

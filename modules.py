@@ -4,6 +4,7 @@ from transformers import DistilBertModel, DistilBertConfig, VideoMAEModel, Video
 import config as CFG
 from decord import VideoReader, cpu
 import numpy as np
+import time
 
 
 class ImageEncoder(nn.Module):
