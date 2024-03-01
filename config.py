@@ -17,6 +17,9 @@ num_test = 100
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # device = "cpu"
 
+audio_encoder_model = "facebook/wav2vec2-base-960h"
+audio_embedding = 768
+
 model_name = 'facebook/vit-mae-base'
 image_embedding = 768
 

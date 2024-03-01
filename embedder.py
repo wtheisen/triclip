@@ -65,10 +65,10 @@ with torch.no_grad():
         # video_batch = [x[2] for x in dataframe_tuple_list[i:i+video_batch_size]]
 
         # vl = VideoLoader(video_batch, ctx=[cpu(0)], shape=(17, 244, 244, 3), interval=1, skip=1000000, shuffle=0)
-        
+
         # vr = VideoReader(i[2], num_threads=8, ctx=cpu(), width=244, height=244)
-        avr = AVReader(i[2], num_threads=8, ctx=cpu(), width=244, height=244)
-        indices = np.random.randint(0, len(vr) - 1, size=17)
+        avr = AVReader(i[2], num_threads=8, ctx=cpu(), width=244, height=244, sample_rate=16000)
+        indices = np.random.randint(0, len(avr) - 1, size=17)
         audio_frames, video_frames = avr.get_batch(indices[:-1])
         _, image_frame = avr[indices[-1]]
 
@@ -82,7 +82,9 @@ with torch.no_grad():
         v_e = np.array(video_encoder([video_frames]).squeeze().cpu())
         video_embeddings.extend([v_e])
 
-        a_e = np.array(audio_encoder([audio_frames]).squeeze().cpu())
+        a_s = torch.cat(audio_frames, dim=1).squeeze()
+        a_e = np.array(audio_encoder(a_s).squeeze().cpu())
+        print(a_e.shape)
         audio_embeddings.extend([a_e])
 
         i_e = np.array(image_encoder(image_frame).cpu())
@@ -97,24 +99,24 @@ with torch.no_grad():
         input_ids = torch.tensor(text_tokens['input_ids'], dtype=torch.int).to(CFG.device)
         attention_masks = torch.Tensor(text_tokens['attention_mask']).to(CFG.device)
         t_e = np.array(text_encoder(input_ids, attention_masks).cpu())
-        print(t_e.shape)
         text_embeddings.extend(t_e)
 
         valid_rows.extend(i)
 
-    save_tag = sys.argv[1].split('/')[1].split('_')[3].split('.')[0]
-    np.save(f'video_embeddings_{save_tag}.npy', np.asarray(video_embeddings))
-    np.save(f'audio_embeddings_{save_tag}.npy', np.asarray(audio_embeddings))
-    np.save(f'image_embeddings_{save_tag}.npy', np.asarray(image_embeddings))
-    # print(np.asarray(image_embeddings).shape)
-    # print(np.asarray(video_embeddings).shape)
-    # print(np.asarray(text_embeddings).shape)
+    # save_tag = sys.argv[1].split('/')[1].split('_')[3].split('.')[0]
+    # np.save(f'video_embeddings_{save_tag}.npy', np.asarray(video_embeddings))
+    # np.save(f'audio_embeddings_{save_tag}.npy', np.asarray(audio_embeddings))
+    # np.save(f'image_embeddings_{save_tag}.npy', np.asarray(image_embeddings))
+    print(np.asarray(image_embeddings).shape)
+    print(np.asarray(audio_embeddings).shape)
+    print(np.asarray(video_embeddings).shape)
+    print(np.asarray(text_embeddings).shape)
     #print(len(valid_rows))
-    np.save(f'text_embeddings_{save_tag}.npy', np.array(text_embeddings))
+    # np.save(f'text_embeddings_{save_tag}.npy', np.array(text_embeddings))
 
     # Writing to the CSV file
     # with open( f'valid_rows_{save_tag}.csv', 'w+', newline='') as csvfile:
-    with open( f'valid_rows.csv', 'w+', newline='') as csvfile:
-        writer = csv.writer(csvfile)
-        writer.writerows(valid_rows)
+    # with open( f'valid_rows.csv', 'w+', newline='') as csvfile:
+    #     writer = csv.writer(csvfile)
+    #     writer.writerows(valid_rows)
         

@@ -1,10 +1,28 @@
 import torch
 from torch import nn
-from transformers import DistilBertModel, DistilBertConfig, VideoMAEModel, VideoMAEImageProcessor, ViTImageProcessor, ViTMAEModel
+from transformers import DistilBertModel, DistilBertConfig, VideoMAEModel, VideoMAEImageProcessor, ViTImageProcessor, ViTMAEModel, Wav2Vec2Processor, Wav2Vec2Model
 import config as CFG
 from decord import VideoReader, cpu
 import numpy as np
 import time
+
+
+class AudioEncoder(nn.Module):
+    """
+    Encode audio to a fixed size vector
+    """
+
+    def __init__(self, model_name=CFG.audio_encoder_model, pretrained=CFG.pretrained, trainable=CFG.trainable):
+        super().__init__()
+
+        self.processor = Wav2Vec2Processor.from_pretrained(model_name)
+        self.model = Wav2Vec2Model.from_pretrained(model_name)
+
+    def forward(self, batch):
+        input_values = self.processor(batch, return_tensors="pt", sampling_rate=16000).input_values
+
+        outputs = self.model(input_values.to(CFG.device))
+        return torch.mean(outputs.last_hidden_state, dim=1)
 
 
 class ImageEncoder(nn.Module):
