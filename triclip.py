@@ -35,17 +35,17 @@ class CLIPModel(nn.Module):
 
     def embed(self, batch):
         with torch.no_grad():
-            image_features = self.image_encoder(batch["image"])
-            text_features = self.text_encoder(
-                input_ids=batch["input_ids"], attention_mask=batch["attention_mask"]
-            )
+            # image_features = self.image_encoder(batch["image"])
+            # text_features = self.text_encoder(
+            #     input_ids=batch["input_ids"], attention_mask=batch["attention_mask"]
+            # )
             # video_features = self.video_encoder(batch["video"])
 
             # Getting Image and Text Embeddings (with same dimension)
-            image_embeddings = self.image_projection(image_features)
-            text_embeddings = self.text_projection(text_features)
+            image_embeddings = self.image_projection(batch["image"])
+            text_embeddings = self.text_projection(batch["text"])
             video_embeddings = self.video_projection(batch["video"])
-            video_embeddings = video_embeddings.squeeze(1)
+            # video_embeddings = video_embeddings.squeeze(1)
 
         return video_embeddings, image_embeddings, text_embeddings
 
@@ -71,20 +71,22 @@ class CLIPModel(nn.Module):
 
         # st = time.time()
         image_embeddings = self.image_projection(batch["image"])
+        # image_embeddings = self.image_projection(image_encodings)
         text_embeddings = self.text_projection(batch["text"])
-        video_embeddings = self.video_projection(batch["video"]).squeeze(1)
+        # text_embeddings = self.image_projection(text_encodings)
+        video_embeddings = self.video_projection(batch["video"])
+        # video_embeddings = self.video_projection(batch["video"]).squeeze(1)
         # et = time.time()
         # print('projecting time:', et - st)
 
         # Assuming batch_size is the same for all modalities
-        batch_size = image_embeddings.size(0)
 
         # st = time.time()
-        total_loss = CL.contrastive_alpha(image_embeddings, text_embeddings, video_embeddings, CFG.temperature)
+        # total_loss = CL.contrastive_alpha(image_embeddings, text_embeddings, video_embeddings, CFG.temperature)
         # et = time.time()
         # print('loss time:', et - st)
 
-        # total_loss = TL.triplet_alfa(image_embeddings, text_embeddings, video_embeddings) 
+        total_loss = TL.triplet_alfa(image_embeddings, text_embeddings, video_embeddings) 
         # total_loss = TL.triplet_bravo(image_embeddings, text_embeddings, video_embeddings) 
         # total_loss = TL.triplet_charlie(image_embeddings, text_embeddings, video_embeddings) 
         # total_loss = TL.triplet_delta(image_embeddings, text_embeddings, video_embeddings) 

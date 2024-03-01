@@ -11,11 +11,10 @@ from decord import VideoReader, cpu, gpu, bridge
 bridge.set_bridge('torch')
 
 class CLIPTriplets(torch.utils.data.Dataset):
-    def __init__(self, ids, caption, video_embeddings, image_embeddings, text_embeddings):
+    def __init__(self, ids, caption, video_path, video_embeddings, image_embeddings, text_embeddings):
         self.ids = ids
-        self.images = ''
         self.captions = caption
-        # self.video_paths = video_path
+        self.video_paths = video_path
         self.videos = video_embeddings
         self.images = image_embeddings
         # print(self.video_paths)
@@ -45,9 +44,10 @@ class CLIPTriplets(torch.utils.data.Dataset):
         #     key: torch.tensor(values[idx])
         #     for key, values in self.encoded_captions.items()
         # }
-        # # item['video_path'] = self.videos[idx]
-
         item = {}
+
+        item['video_path'] = self.video_paths[idx]
+
         #get video frames and take an image out of the unchosen one
         # videoreader = VideoReader(self.videos[idx], ctx=gpu(0), width=244, height=244)
         item['video'] = self.videos[idx]

@@ -37,9 +37,10 @@ def get_lr(optimizer):
     for param_group in optimizer.param_groups:
         return param_group["lr"]
 
-def make_train_valid_dfs():
+def make_train_valid_dfs(size):
     print('Sneed')
-    dataframe = pd.read_csv(f"{CFG.captions_path}/video_captions_small.csv", delimiter='|')
+    #dataframe = pd.read_csv(f"{CFG.captions_path}/fixed_video_captions.csv", delimiter='|')
+    dataframe = pd.read_csv(f"{CFG.captions_path}/fixed_video_captions.csv")
 
     text_embeddings = np.load('text_embeddings.npy')
     # print(text_embeddings.shape)
@@ -55,31 +56,44 @@ def make_train_valid_dfs():
     # print(len(c.keys()))
     # exit()
 
-    max_id = dataframe["id"].max()
-    image_ids = np.arange(0, max_id)
+    #max_id = len(image_embeddings)
+    image_ids = list(dataframe["id"].values)[:51000]
+    random.shuffle(image_ids)
 
     total_holdout = CFG.num_val + CFG.num_test
 
     np.random.seed(42)
     train_ids = np.random.choice(
-        image_ids[:-total_holdout], size=CFG.num_train, replace=False
+        image_ids[:-total_holdout], size=size, replace=False
     )
 
-    val_ids = image_ids[-total_holdout:-CFG.num_test]
-    test_ids = image_ids[-CFG.num_test:]
-
+    train_ids.sort()
+    # test_ids = image_ids[-CFG.num_test:]
 
     #train_ids = [id_ for id_ in image_ids if id_ not in val_test_ids]
-    random.shuffle(train_ids)
+    # random.shuffle(train_ids)
     #train_ids = train_ids[:CFG.num_train]
-
     train_dataframe = dataframe[dataframe["id"].isin(train_ids)].reset_index(drop=True)
     train_dataframe = train_dataframe.assign(text_embedding=[text_embeddings[x] for x in train_ids])
     train_dataframe = train_dataframe.assign(image_embedding=[image_embeddings[x] for x in train_ids])
     train_dataframe = train_dataframe.assign(video_embedding=[video_embeddings[x] for x in train_ids])
 
+
+    # print(train_dataframe.columns.values)
+    # for i in train_dataframe.iterrows():
+    #     print(i[1]['text_embedding'].shape, i[1]['image_embedding'].shape, i[1]['video_embedding'].shape)
+    # exit()
+
+    val_test_ids = image_ids[-total_holdout:]
+    random.shuffle(val_test_ids)
+
+    val_ids = val_test_ids[:CFG.num_val]
+    val_ids.sort()
+
+    test_ids = val_test_ids[CFG.num_test:]
+    test_ids.sort()
     #val_ids = val_test_ids[:len(val_test_ids)//2]
-    val_ids = val_ids[:CFG.num_val]
+    # val_ids = val_ids[:CFG.num_val]
 
     #test_ids = val_test_ids[len(val_test_ids)//2:]
     # test_ids = test_ids[:CFG.num_test]
@@ -152,6 +166,7 @@ def build_loaders(dataframe, tokenizer, mode):
         dataset = CLIPTriplets(
             dataframe["id"].values,
             dataframe["caption"].values,
+            dataframe["video_path"].values,
             # videoreader = VideoReader(self.videos[idx], num_threads=8, ctx=cpu(0), width=244, height=244)
             # [VideoReader(x, num_threads=8, ctx=gpu(0), width=244, height=244) for x in dataframe["video_path"]],
             dataframe['video_embedding'].values,

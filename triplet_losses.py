@@ -30,7 +30,7 @@ def triplet_alfa(image_embeddings, text_embeddings, video_embeddings):
                     # if i != j:
                     total_loss += triplet_loss(anchor_triple[i], positive_triple[j], negative_triple[q])
 
-    return total_loss
+    return total_loss * 0.001
 
 def triplet_bravo(image_embeddings, text_embeddings, video_embeddings):
     total_loss = 0.0

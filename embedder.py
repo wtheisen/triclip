@@ -1,4 +1,6 @@
+import csv
 import torch
+import sys
 
 import pandas as pd
 import numpy as np
@@ -18,18 +20,15 @@ bridge.set_bridge('torch')
 #     Function to load a single video and its frames based on the given path.
 #     Returns a tuple of the video frames and a single image frame.
 #     """
-#     vr = VideoReader(video_path, num_threads=32, ctx=cpu(), width=244, height=244)
-#     indices = np.random.randint(0, len(vr) - 1, size=17)
-#     video_frames = vr.get_batch(indices[:-1])
-#     image_frame = vr[indices[-1]]
 #     return video_frames, image_frame
 
 with torch.no_grad():
     video_encoder = VideoEncoder().to(CFG.device)
     image_encoder = ImageEncoder().to(CFG.device)
     text_encoder = TextEncoder().to(CFG.device)
+    tokenizer = DistilBertTokenizer.from_pretrained(CFG.text_tokenizer)
 
-    dataframe = pd.read_csv(f"{CFG.captions_path}/video_captions.csv", delimiter='|')
+    dataframe = pd.read_csv(sys.argv[1], delimiter='|')
 
 
     # for video_path in tqdm(dataframe["video_path"]):
@@ -50,46 +49,65 @@ with torch.no_grad():
 
     video_embeddings = []
     image_embeddings = []
+    text_embeddings = []
 
+    valid_rows = [('id', 'video_path', 'caption')]
     video_batch_size = 128
 
-    video_path_list = list(dataframe["video_path"].values)
-    for i in tqdm(range(0, len(video_path_list), video_batch_size), desc='Loading Videos'):
-        video_batch = video_path_list[i:i+video_batch_size]
+    dataframe_tuple_list = [row for row in dataframe.itertuples()][:10]
 
-        vl = VideoLoader(video_batch, ctx=cpu(0), shape=(17, 244, 244, 3), interval=1, skip=1000000, shuffle=0)
+    valid_ids = []
+    for i in tqdm(dataframe_tuple_list, desc='Loading Videos'):
+    #for i in tqdm(range(0, len(dataframe_tuple_list), video_batch_size), desc='Loading Videos'):
+
+        # video_batch = [x[2] for x in dataframe_tuple_list[i:i+video_batch_size]]
+
+        # vl = VideoLoader(video_batch, ctx=[cpu(0)], shape=(17, 244, 244, 3), interval=1, skip=1000000, shuffle=0)
         
-        video_batch = []
-        image_batch = []
-        for batch in vl:
-            video_batch.append(batch[0][:-1])
-            image_batch.append(batch[0][-1])
+        vr = VideoReader(i[2], num_threads=8, ctx=cpu(), width=244, height=244)
+        indices = np.random.randint(0, len(vr) - 1, size=17)
+        video_frames = vr.get_batch(indices[:-1])
+        image_frame = vr[indices[-1]]
 
-        video_embeddings.extend(np.array(video_encoder(video_batch).squeeze().cpu()))
-        image_embeddings.extend(np.array(image_encoder(image_batch).cpu()))
 
-    # print(len(video_embeddings))
-    # temp = np.asarray(video_embeddings)
-    # temp_img = np.array(image_embeddings)
+        # for batch in vl:
+        valid_ids.append(i[0])
+            # print('file:', batch[1].tolist()[0][0], batch[0].shape)
+            # video_batch.append(batch[0][:-1])
+            # image_batch.append(batch[0][-1])
 
-    np.save('video_embeddings.npy', np.asarray(video_embeddings))
-    np.save('image_embeddings.npy', np.asarray(image_embeddings))
-    # for video_path in tqdm(dataframe["video_path"].values, desc='Loading videos'):
-    #     indices = np.random.randint(0, len(vr) - 1, size=17)
-    #     videos.append(vr.get_batch(indices[:-1]))
-    #     images.append(vr[indices[-1]])
+        v_e = np.array(video_encoder([video_frames]).squeeze().cpu())
+        video_embeddings.extend([v_e])
 
-    # video_embeddings = video_encoder(videos).squeeze()
-    # image_embeddings = image_encoder(images)
+        i_e = np.array(image_encoder(image_frame).cpu())
+        image_embeddings.extend(i_e)
 
-    texts = dataframe['caption'].values
+        # caption_batch = [x[3] for x in dataframe_tuple_list[i:i+video_batch_size]]
 
-    tokenizer = DistilBertTokenizer.from_pretrained(CFG.text_tokenizer)
-    text_tokens = tokenizer(
-        list(texts), padding=True, truncation=True, max_length=CFG.max_length
-    )
-    input_ids = torch.tensor(text_tokens['input_ids'], dtype=torch.int).to(CFG.device)
-    attention_masks = torch.Tensor(text_tokens['attention_mask']).to(CFG.device)
-    text_embeddings = text_encoder(input_ids, attention_masks)
+        text_tokens = tokenizer(
+            [i[2]], padding=True, truncation=True, max_length=CFG.max_length
+        )
 
-    np.save('text_embeddings.npy', np.array(text_embeddings.cpu()))
+        input_ids = torch.tensor(text_tokens['input_ids'], dtype=torch.int).to(CFG.device)
+        attention_masks = torch.Tensor(text_tokens['attention_mask']).to(CFG.device)
+        t_e = np.array(text_encoder(input_ids, attention_masks).cpu())
+        print(t_e.shape)
+        text_embeddings.extend(t_e)
+
+        valid_rows.extend(i)
+
+    save_tag = sys.argv[1].split('/')[1].split('_')[3].split('.')[0]
+    np.save(f'video_embeddings_{save_tag}.npy', np.asarray(video_embeddings))
+    np.save(f'image_embeddings_{save_tag}.npy', np.asarray(image_embeddings))
+    # print(np.asarray(image_embeddings).shape)
+    # print(np.asarray(video_embeddings).shape)
+    # print(np.asarray(text_embeddings).shape)
+    #print(len(valid_rows))
+    np.save(f'text_embeddings_{save_tag}.npy', np.array(text_embeddings))
+
+    # Writing to the CSV file
+    # with open( f'valid_rows_{save_tag}.csv', 'w+', newline='') as csvfile:
+    with open( f'valid_rows.csv', 'w+', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerows(valid_rows)
+        

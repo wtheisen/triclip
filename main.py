@@ -29,11 +29,15 @@ def test_retrieval(model, test_loader, num_trials=300):
 
     with torch.no_grad():
         for batch in tqdm_object:
-            # gpu_batch = {k: v.to(CFG.device) if k != 'video_path' else v for k, v in batch.items()}
+            batch = {k: v.to(CFG.device) if k != 'video_path' else v for k, v in batch.items()}
             # vid_embed, img_embed, txt_embed = model.embed(gpu_batch)
-            vid_embed = batch["video"]
-            img_embed = batch["image"]
-            txt_embed = batch["text"]
+
+            # batch = {k: v.to(CFG.device) for k, v in batch.items()}
+            img_embed = model.image_projection(batch["image"])
+            # image_embeddings = self.image_projection(image_encodings)
+            txt_embed = model.text_projection(batch["text"])
+            # text_embeddings = self.image_projection(text_encodings)
+            vid_embed = model.video_projection(batch["video"])
 
             # video_embeddings = self.video_projection(video_features)
             # vid_embed = batch['video']
@@ -90,6 +94,7 @@ def test_retrieval(model, test_loader, num_trials=300):
         scores = defaultdict(list)
         for i, embed_list in enumerate(search_space):
             for embedding in embed_list:
+                # sim = nn.functional.cosine_similarity(test_embedding, embedding, dim=0)
                 sim = nn.functional.cosine_similarity(test_embedding, embedding, dim=0)
                 scores[modalities[i]].append((sim, embedding))
 
@@ -118,19 +123,19 @@ def test_retrieval(model, test_loader, num_trials=300):
                     recall_dict[recall] += 1
                     modality_correct[true_id[1]][recall] += 1
 
-    print(f'Contrastive Alfa@ {num_trials} trials:')
-    print(f'\tTrain/Val/Test: {CFG.num_train}/{CFG.num_val}/{CFG.num_test} - {CFG.epochs} Epochs')
-    for recall, hits in recall_dict.items():
-        print(f'\t\tRecall @ {recall}',  hits / num_trials)
+    # print(f'Contrastive Alfa@ {num_trials} trials:')
+    # print(f'\tTrain/Val/Test: {CFG.num_train}/{CFG.num_val}/{CFG.num_test} - {CFG.epochs} Epochs')
+    # for recall, hits in recall_dict.items():
+    #     print(f'\t\tRecall @ {recall}',  hits / num_trials)
     
     for recall, hits in recall_dict.items():
         recall_dict[recall] = hits / num_trials
 
-    for modality, total_num in modality_counts.items():
-        print(f'% correct for {modality} out of {total_num}:')
+    # for modality, total_num in modality_counts.items():
+    #     print(f'% correct for {modality} out of {total_num}:')
 
-        for k, recall in modality_correct[modality].items():
-            print(f'@{k}: {recall / total_num}')
+    #     for k, recall in modality_correct[modality].items():
+    #         print(f'@{k}: {recall / total_num}')
 
     # print(modality_counts)
     # print(modality_correct)
@@ -139,7 +144,6 @@ def test_retrieval(model, test_loader, num_trials=300):
 def train_epoch(model, train_loader, optimizer, lr_scheduler, step):
     loss_meter = AvgMeter()
     tqdm_object = tqdm(train_loader, total=len(train_loader))
-
 
     for batch in tqdm_object:
         # batch = {k: v.to(CFG.device) for k, v in batch.items()}
@@ -167,6 +171,7 @@ def valid_epoch(model, valid_loader):
 
     tqdm_object = tqdm(valid_loader, total=len(valid_loader))
     for batch in tqdm_object:
+        # batch = {k: v.to(CFG.device) for k, v in batch.items()}
         batch = {k: v.to(CFG.device) if k != 'video_path' else v for k, v in batch.items()}
 
         loss = model(batch)
@@ -178,14 +183,13 @@ def valid_epoch(model, valid_loader):
     return loss_meter
 
 
-def main():
+def main(size, epochs):
     st = time.time()
-    train_df, valid_df, test_df = make_train_valid_dfs()
+    train_df, valid_df, test_df = make_train_valid_dfs(size)
 
     tokenizer = DistilBertTokenizer.from_pretrained(CFG.text_tokenizer)
     train_loader = build_loaders(train_df, tokenizer, mode="train")
     valid_loader = build_loaders(valid_df, tokenizer, mode="valid")
-
 
     model = CLIPModel().to(CFG.device)
     optimizer = torch.optim.AdamW(
@@ -199,7 +203,7 @@ def main():
     best_loss = float('inf')
     best_model = None
 
-    for epoch in tqdm(range(CFG.epochs), desc='Epochs'):
+    for epoch in tqdm(range(epochs), desc='Epochs'):
         model.train()
         train_loss = train_epoch(model, train_loader, optimizer, lr_scheduler, step)
 
@@ -211,14 +215,15 @@ def main():
             best_loss = valid_loss.avg
             best_model = model
 
-    torch.save(model.state_dict(), f"{CFG.num_train}t_{CFG.epochs}e_best.pt")
-    print("Wrote Best Model...")
+    torch.save(model.state_dict(), f"{CFG.num_train}t_{CFG.epochs}e_triplet.pt")
+    # print("Wrote Best Model...")
 
     et = time.time()
     test_loader = build_loaders(test_df, tokenizer, mode="valid")
 
     model.eval()
     with torch.no_grad():
+        # return test_retrieval(best_model, test_loader), et - st
         return test_retrieval(best_model, test_loader), et - st
 
 if __name__ == "__main__":

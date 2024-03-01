@@ -14,8 +14,8 @@ num_train = 100
 num_val = 20
 num_test = 100
 
-# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-device = "cpu"
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# device = "cpu"
 
 model_name = 'facebook/vit-mae-base'
 image_embedding = 768

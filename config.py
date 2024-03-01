@@ -1,16 +1,16 @@
 import torch
 
 debug = True
-captions_path = "/media/wtheisen/scratch3/triclip/"
+captions_path = "/media/wtheisen/scratch3/triclip"
 batch_size = 128
 num_workers = 0
 lr = 5e-5
 weight_decay = 1e-3
 patience = 2
 factor = 0.5
-epochs = 50
+epochs = 1
 
-num_train = 100
+num_train = 1000
 num_val = 100
 num_test = 100
 
