@@ -7,11 +7,11 @@ import numpy as np
 
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from transformers import DistilBertTokenizer
-from decord import VideoReader, VideoLoader, bridge, cpu
+from decord import AVReader, bridge, cpu
 from tqdm import tqdm
 
 import config as CFG
-from modules import VideoEncoder, ImageEncoder, TextEncoder
+from modules import VideoEncoder, ImageEncoder, TextEncoder, AudioEncoder
 
 bridge.set_bridge('torch')
 
@@ -24,6 +24,7 @@ bridge.set_bridge('torch')
 
 with torch.no_grad():
     video_encoder = VideoEncoder().to(CFG.device)
+    audio_encoder = AudioEncoder().to(CFG.device)
     image_encoder = ImageEncoder().to(CFG.device)
     text_encoder = TextEncoder().to(CFG.device)
     tokenizer = DistilBertTokenizer.from_pretrained(CFG.text_tokenizer)
@@ -48,6 +49,7 @@ with torch.no_grad():
     #         images.append(image_frame)
 
     video_embeddings = []
+    audio_embeddings = []
     image_embeddings = []
     text_embeddings = []
 
@@ -64,10 +66,11 @@ with torch.no_grad():
 
         # vl = VideoLoader(video_batch, ctx=[cpu(0)], shape=(17, 244, 244, 3), interval=1, skip=1000000, shuffle=0)
         
-        vr = VideoReader(i[2], num_threads=8, ctx=cpu(), width=244, height=244)
+        # vr = VideoReader(i[2], num_threads=8, ctx=cpu(), width=244, height=244)
+        avr = AVReader(i[2], num_threads=8, ctx=cpu(), width=244, height=244)
         indices = np.random.randint(0, len(vr) - 1, size=17)
-        video_frames = vr.get_batch(indices[:-1])
-        image_frame = vr[indices[-1]]
+        audio_frames, video_frames = avr.get_batch(indices[:-1])
+        _, image_frame = avr[indices[-1]]
 
 
         # for batch in vl:
@@ -78,6 +81,9 @@ with torch.no_grad():
 
         v_e = np.array(video_encoder([video_frames]).squeeze().cpu())
         video_embeddings.extend([v_e])
+
+        a_e = np.array(audio_encoder([audio_frames]).squeeze().cpu())
+        audio_embeddings.extend([a_e])
 
         i_e = np.array(image_encoder(image_frame).cpu())
         image_embeddings.extend(i_e)
@@ -98,6 +104,7 @@ with torch.no_grad():
 
     save_tag = sys.argv[1].split('/')[1].split('_')[3].split('.')[0]
     np.save(f'video_embeddings_{save_tag}.npy', np.asarray(video_embeddings))
+    np.save(f'audio_embeddings_{save_tag}.npy', np.asarray(audio_embeddings))
     np.save(f'image_embeddings_{save_tag}.npy', np.asarray(image_embeddings))
     # print(np.asarray(image_embeddings).shape)
     # print(np.asarray(video_embeddings).shape)
