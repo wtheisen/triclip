@@ -339,10 +339,10 @@ nb_clf = GaussianNB()
 a, b, c = train_predict_plot(nb_clf, "Naive Bayes", X_train, X_test, y_train, y_test)
 model_stats['Naive Bayes'] = (a, b, c)
 
-from sklearn.svm import SVC
+from sklearn.svm import LinearSVC
 
 # Initialize the classifier
-svm_clf = SVC(kernel='linear', random_state=42)
+svm_clf = LinearSVC(random_state=42)
 a, b, c = train_predict_plot(svm_clf, "SVM", X_train, X_test, y_train, y_test)
 model_stats['SVM'] = (a, b, c)
 

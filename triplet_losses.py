@@ -132,4 +132,4 @@ def triplet_delta(image_embeddings, text_embeddings, video_embeddings):
                                 # total_loss += triplet_loss(anchor[i], anchor[j], hard_negative[q])
                 total_loss += sum(losses) / len(losses)
 
-    return total_loss / batch_size
+    return (total_loss / batch_size) * 9
